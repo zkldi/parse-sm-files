@@ -16,6 +16,7 @@ const logger = CreateLogger("SM Hash Dir Batch", undefined);
 
 const songsFolder = process.argv[2];
 const seedsFolder = process.argv[3];
+const batchparse = process.argv[4];
 
 if (!songsFolder) {
 	logger.error(`Expected songs folder to search for .sm files in.`);
@@ -42,29 +43,31 @@ function badEscapeFn(unsafe: string) {
 async function main() {
 	const directories = fs.readdirSync(songsFolder);
 
-	const file = "BATCHPARSE_TEMP.tmp";
+	const file = batchparse || "BATCHPARSE_TEMP.tmp";
 
-	fs.writeFileSync(
-		file,
-		`# Keep the packs you wish to parse here.
+	if (!batchparse) {
+		fs.writeFileSync(
+			file,
+			`# Keep the packs you wish to parse here.
 # start with e or y. edit the folder name if you wish.
 ${directories.map((e) => `y ${e}`).join("\n")}
 
 # Save and exit the editor when you're done.`
-	);
+		);
 
-	try {
-		const r = spawnSync(process.env.EDITOR ?? "nano", [file], {
-			stdio: "inherit",
-		});
+		try {
+			const r = spawnSync(process.env.EDITOR ?? "nano", [file], {
+				stdio: "inherit",
+			});
 
-		if (r.status !== 0) {
-			throw new Error(`Editor exited with non-zero status code.`);
+			if (r.status !== 0) {
+				throw new Error(`Editor exited with non-zero status code.`);
+			}
+		} catch (err) {
+			logger.error(err);
+			logger.error("Failed to open data in editor. Cancelling.");
+			process.exit(1);
 		}
-	} catch (err) {
-		logger.error(err);
-		logger.error("Failed to open data in editor. Cancelling.");
-		process.exit(1);
 	}
 
 	const data = fs.readFileSync(file, "utf-8");
@@ -72,7 +75,7 @@ ${directories.map((e) => `y ${e}`).join("\n")}
 	// fs.rmSync(file);
 
 	const promises = [];
-	const commands: Array<string> = [];
+	const commands: Array<Array<string>> = [];
 
 	for (const line of data.split("\n").map((e) => e.trim())) {
 		if (line.length === 0 || line.startsWith("#")) {
@@ -115,11 +118,20 @@ ${directories.map((e) => `y ${e}`).join("\n")}
 
 				await writeFile(saveLoc, JSON.stringify(output));
 
-				commands.push(
-					`ts-node scripts/rerunners/itg/parse-output.js${
-						type === "e" ? " --ecsRule" : ""
-					} --pack=${badEscapeFn(packName)} -i '${saveLoc}'`
-				);
+				const strs = [
+					"ts-node",
+					`scripts/rerunners/itg/parse-output.js`,
+					`-p`,
+					`${packName}`,
+					`-i`,
+					`${saveLoc}`,
+				];
+
+				if (type === "e") {
+					strs.push("--ecsRule");
+				}
+
+				commands.push(strs);
 
 				logger.info(`Added support for ${packName} to seeds.`);
 			})()
@@ -132,7 +144,7 @@ ${directories.map((e) => `y ${e}`).join("\n")}
 	for (const command of commands) {
 		logger.info(command);
 		try {
-			execSync(command, { cwd: seedsFolder });
+			spawnSync(command[0], command.slice(1), { cwd: seedsFolder });
 		} catch (err) {
 			logger.error(err);
 		}
