@@ -114,7 +114,7 @@ function fullySimplify(partiallySimplified: string): string {
 				.split("-")
 				.map((e) => parseFloat(e) || 0)
 				.reduce((a, b) => a + b, 0)
-				.toFixed(0)}${char}`;
+				.toFixed(0)}*${char}`;
 
 			curStr = "";
 		} else {
@@ -123,10 +123,14 @@ function fullySimplify(partiallySimplified: string): string {
 	}
 
 	if (curStr) {
-		outStr = `${outStr}${curStr
-			.split("-")
-			.map((e) => parseFloat(e) || 0)
-			.reduce((a, b) => a + b, 0)}`;
+		if (curStr.includes("-")) {
+			outStr = `${outStr}${curStr
+				.split("-")
+				.map((e) => parseFloat(e) || 0)
+				.reduce((a, b) => a + b, 0)}*`;
+		} else {
+			outStr = `${outStr}${curStr}`;
+		}
 	}
 
 	// remove any trailing divisors
